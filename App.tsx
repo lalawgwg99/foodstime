@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { BookOpen, Coffee, ChefHat } from 'lucide-react';
 import { CategoryPage } from './components/CategoryPage';
 import { BasketBar } from './components/BasketBar';
 import { RecipeSuggestions } from './components/RecipeSuggestions';
 import { FavoritesPage } from './components/FavoritesPage';
 import { BottomNav, View } from './components/BottomNav';
+import { StickThinking, StickChef } from './components/StickFigure';
 import { suggestRecipes } from './services/aiService';
 import { Recipe } from './types';
 
@@ -16,11 +16,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>('category');
 
-  const toggle = (item: string) => {
-    setSelected(prev =>
-      prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]
-    );
-  };
+  const toggle = (item: string) =>
+    setSelected(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
 
   const handleSubmit = async () => {
     if (selected.length === 0) return;
@@ -32,7 +29,7 @@ export default function App() {
       setUsedIngredients([...selected]);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
-      setError(e instanceof Error ? e.message : '查詢失敗，請稍後再試');
+      setError(e instanceof Error ? e.message : '出了點問題，請稍後再試');
     } finally {
       setLoading(false);
     }
@@ -52,23 +49,22 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-paper font-sans flex flex-col">
-      {/* Nav */}
-      <nav className="sticky top-0 z-40 bg-paper/90 backdrop-blur-xl border-b border-ink/5">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={handleReset} className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-ink rounded-lg flex items-center justify-center text-paper text-sm font-bold">F</div>
-            <span className="font-serif font-bold text-ink text-lg">FoodsTime</span>
-            <span className="hidden md:inline text-xs text-muted tracking-widest uppercase">食材料理</span>
+    <div className="min-h-screen bg-paper font-sans text-ink flex flex-col">
+      {/* Nav — 極簡線條 */}
+      <nav className="sticky top-0 z-40 bg-white border-b border-ink/10">
+        <div className="max-w-2xl mx-auto px-6 h-14 flex items-center justify-between">
+          <button onClick={handleReset} className="flex items-center gap-2">
+            <span className="font-serif font-black text-xl tracking-tight">FoodsTime</span>
+            <span className="text-xs text-muted border border-muted/30 rounded px-1.5 py-0.5 hidden md:inline">冰箱救星</span>
           </button>
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-1">
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-0.5">
               {(['category', 'favorites'] as View[]).map(v => (
                 <button
                   key={v}
                   onClick={() => handleNavChange(v)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    view === v ? 'text-gold bg-gold/8' : 'text-muted hover:text-ink'
+                  className={`px-3 py-1.5 text-sm transition-colors rounded ${
+                    view === v ? 'font-bold text-ink' : 'text-muted hover:text-ink'
                   }`}
                 >
                   {v === 'category' ? '選食材' : '收藏'}
@@ -79,25 +75,31 @@ export default function App() {
               href="https://buymeacoffee.com/laladoo99"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-[#FFDD00] text-black rounded-full text-xs font-black hover:scale-105 transition-transform"
+              className="text-xs border border-ink/20 rounded px-3 py-1.5 hover:bg-ink hover:text-white transition-all hidden md:block"
             >
-              <Coffee size={12} /> 請我喝咖啡
+              ☕ 請我喝咖啡
             </a>
-            <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" title="AI 服務運作中" />
           </div>
         </div>
       </nav>
 
-      <main className="flex-1 max-w-2xl mx-auto px-6 py-8 w-full">
-        {/* Error */}
-        {error && (
-          <p className="text-center text-red-500 text-sm mb-6 bg-red-50 border border-red-100 rounded-xl py-3 px-6">
-            {error}
-          </p>
+      <main className="flex-1 max-w-2xl mx-auto px-6 py-10 w-full">
+
+        {/* AI 思考中 */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
+            <div className="animate-wobble text-ink">
+              <StickThinking className="w-28 h-36" />
+            </div>
+            <p className="text-2xl font-serif font-bold mt-6 mb-2">主廚在抓頭中…</p>
+            <p className="text-sm text-muted">
+              盯著你選的 {selected.length} 種食材，努力想辦法
+            </p>
+          </div>
         )}
 
-        {/* Recipe Results */}
-        {recipes && !loading && (
+        {/* 食譜結果 */}
+        {!loading && recipes && (
           <RecipeSuggestions
             recipes={recipes}
             ingredients={usedIngredients}
@@ -105,43 +107,33 @@ export default function App() {
           />
         )}
 
-        {/* Loading */}
-        {loading && (
-          <div className="text-center py-24 animate-fade-in">
-            <ChefHat size={48} className="mx-auto text-gold mb-4 animate-bounce" />
-            <p className="font-serif text-xl text-ink mb-2">AI 主廚正在思考…</p>
-            <p className="text-sm text-muted">
-              根據 {selected.length} 種食材為你設計菜單
-            </p>
-          </div>
-        )}
-
-        {/* Category / Ingredient Picker */}
-        {!recipes && !loading && view === 'category' && (
+        {/* 選食材 */}
+        {!loading && !recipes && view === 'category' && (
           <CategoryPage selected={selected} onToggle={toggle} />
         )}
 
-        {/* Favorites */}
-        {!recipes && !loading && view === 'favorites' && (
+        {/* 收藏 */}
+        {!loading && !recipes && view === 'favorites' && (
           <FavoritesPage onSearch={() => {}} />
+        )}
+
+        {/* 錯誤 */}
+        {error && !loading && (
+          <p className="mt-6 text-center text-sm border border-red-200 text-red-500 rounded-lg py-3 px-4">
+            {error}
+          </p>
         )}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-ink/5 bg-paper mb-16 md:mb-0">
-        <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm text-muted">
-            <BookOpen size={14} />
-            <span>FoodsTime · AI 料理助手 · 資料僅供參考</span>
-          </div>
-          <div className="flex items-center gap-4 text-xs text-muted">
-            <a href="https://cooklabai.com" className="hover:text-ink transition-colors">cooklabai.com</a>
-            <a href="https://buymeacoffee.com/laladoo99" target="_blank" rel="noopener noreferrer" className="hover:text-ink transition-colors">支持開發者</a>
-          </div>
+      <footer className="border-t border-ink/8 py-6 mb-16 md:mb-0">
+        <div className="max-w-2xl mx-auto px-6 flex items-center justify-between text-xs text-muted">
+          <span>FoodsTime · 資料由 AI 生成，僅供參考</span>
+          <a href="https://cooklabai.com" className="hover:text-ink transition-colors">cooklabai.com</a>
         </div>
       </footer>
 
-      {/* Basket bar — above bottom nav */}
+      {/* 食材籃 */}
       {!recipes && !loading && (
         <BasketBar
           items={selected}
@@ -152,7 +144,6 @@ export default function App() {
         />
       )}
 
-      {/* Mobile Bottom Nav */}
       <BottomNav active={view} onChange={handleNavChange} />
     </div>
   );
