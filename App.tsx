@@ -80,7 +80,20 @@ export default function App() {
             <span className="font-serif font-bold text-ink text-lg">FoodsTime</span>
             <span className="hidden md:inline text-xs text-muted tracking-widest uppercase">食材百科</span>
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-1">
+              {(['category', 'favorites'] as View[]).map(v => (
+                <button
+                  key={v}
+                  onClick={() => handleNavChange(v)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    view === v ? 'text-gold bg-gold/8' : 'text-muted hover:text-ink'
+                  }`}
+                >
+                  {v === 'category' ? '分類' : '收藏'}
+                </button>
+              ))}
+            </div>
             <a
               href="https://buymeacoffee.com/laladoo99"
               target="_blank"
