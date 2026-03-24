@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #FFFBF5;
+    color: #1A1818;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background-color: rgba(197, 160, 89, 0.25);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
