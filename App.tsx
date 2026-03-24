@@ -1,84 +1,65 @@
 import React, { useState } from 'react';
-import { BookOpen, Coffee } from 'lucide-react';
-import { SearchBar } from './components/SearchBar';
-import { IngredientDetail } from './components/IngredientDetail';
-import { FeaturedIngredients } from './components/FeaturedIngredients';
-import { LoadingScreen } from './components/LoadingScreen';
+import { BookOpen, Coffee, ChefHat } from 'lucide-react';
 import { CategoryPage } from './components/CategoryPage';
-import { FavoritesPage, useFavorites } from './components/FavoritesPage';
+import { BasketBar } from './components/BasketBar';
+import { RecipeSuggestions } from './components/RecipeSuggestions';
+import { FavoritesPage } from './components/FavoritesPage';
 import { BottomNav, View } from './components/BottomNav';
-import { fetchIngredientInfo, suggestRelated } from './services/aiService';
-import { IngredientInfo } from './types';
+import { suggestRecipes } from './services/aiService';
+import { Recipe } from './types';
 
 export default function App() {
-  const [ingredient, setIngredient] = useState<IngredientInfo | null>(null);
-  const [related, setRelated] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[] | null>(null);
+  const [usedIngredients, setUsedIngredients] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchingFor, setSearchingFor] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<View>('home');
-  const { addHistory } = useFavorites();
+  const [view, setView] = useState<View>('category');
 
-  const handleSearch = async (name: string) => {
+  const toggle = (item: string) => {
+    setSelected(prev =>
+      prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (selected.length === 0) return;
     setLoading(true);
     setError(null);
-    setIngredient(null);
-    setRelated([]);
-    setSearchingFor(name);
-    setView('home');
-
     try {
-      const [info, rel] = await Promise.all([
-        fetchIngredientInfo(name),
-        suggestRelated(name),
-      ]);
-      setIngredient(info);
-      setRelated(rel);
-      addHistory({ name: info.name, emoji: info.emoji, timestamp: Date.now() });
-      setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
+      const result = await suggestRecipes(selected);
+      setRecipes(result);
+      setUsedIngredients([...selected]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
-      console.error(e);
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(`查詢失敗：${msg}`);
+      setError(e instanceof Error ? e.message : '查詢失敗，請稍後再試');
     } finally {
       setLoading(false);
     }
   };
 
   const handleReset = () => {
-    setIngredient(null);
-    setRelated([]);
+    setRecipes(null);
+    setUsedIngredients([]);
+    setSelected([]);
     setError(null);
-    setView('home');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setView('category');
   };
 
   const handleNavChange = (v: View) => {
-    if (v === 'search') {
-      // focus search on home
-      setView('home');
-      setIngredient(null);
-      setTimeout(() => {
-        const el = document.querySelector<HTMLInputElement>('input[type="text"]');
-        el?.focus();
-      }, 100);
-    } else {
-      setView(v);
-      if (v !== 'home') setIngredient(null);
-    }
+    setView(v);
+    if (v === 'category') setRecipes(null);
   };
-
-  const showHome = view === 'home';
 
   return (
     <div className="min-h-screen bg-paper font-sans flex flex-col">
       {/* Nav */}
       <nav className="sticky top-0 z-40 bg-paper/90 backdrop-blur-xl border-b border-ink/5">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={handleReset} className="flex items-center gap-2.5 group">
+          <button onClick={handleReset} className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-ink rounded-lg flex items-center justify-center text-paper text-sm font-bold">F</div>
             <span className="font-serif font-bold text-ink text-lg">FoodsTime</span>
-            <span className="hidden md:inline text-xs text-muted tracking-widest uppercase">食材百科</span>
+            <span className="hidden md:inline text-xs text-muted tracking-widest uppercase">食材料理</span>
           </button>
           <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-1">
@@ -90,7 +71,7 @@ export default function App() {
                     view === v ? 'text-gold bg-gold/8' : 'text-muted hover:text-ink'
                   }`}
                 >
-                  {v === 'category' ? '分類' : '收藏'}
+                  {v === 'category' ? '選食材' : '收藏'}
                 </button>
               ))}
             </div>
@@ -107,64 +88,51 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="flex-1 max-w-5xl mx-auto px-6 py-12 w-full">
-        {/* Category Page */}
-        {view === 'category' && <CategoryPage onSearch={handleSearch} />}
-
-        {/* Favorites Page */}
-        {view === 'favorites' && <FavoritesPage onSearch={handleSearch} />}
-
-        {/* Home / Search / Detail */}
-        {showHome && !ingredient && !loading && (
-          <>
-            {/* Hero */}
-            <div className="text-center mb-12 animate-slide-up">
-              <p className="text-xs font-bold uppercase tracking-[0.35em] text-muted mb-5">AI 全球食材百科</p>
-              <h1 className="text-5xl md:text-7xl font-serif font-bold text-ink leading-tight mb-4">
-                每種食材
-                <span className="block text-gold italic">都有故事</span>
-              </h1>
-              <p className="text-base md:text-lg text-ink/50 font-serif italic max-w-lg mx-auto">
-                從產地到餐桌，AI 為你揭開全球 10,000+ 種食材的深度百科
-              </p>
-              <div className="w-16 h-px bg-gold/40 mx-auto mt-8" />
-            </div>
-
-            <SearchBar onSearch={handleSearch} isLoading={loading} />
-
-            {error && (
-              <p className="text-center text-red-500 text-sm mt-6 bg-red-50 border border-red-100 rounded-xl py-3 px-6 max-w-md mx-auto">
-                {error}
-              </p>
-            )}
-
-            <FeaturedIngredients onSearch={handleSearch} />
-          </>
+      <main className="flex-1 max-w-2xl mx-auto px-6 py-8 w-full">
+        {/* Error */}
+        {error && (
+          <p className="text-center text-red-500 text-sm mb-6 bg-red-50 border border-red-100 rounded-xl py-3 px-6">
+            {error}
+          </p>
         )}
 
-        {showHome && loading && <LoadingScreen name={searchingFor} />}
+        {/* Recipe Results */}
+        {recipes && !loading && (
+          <RecipeSuggestions
+            recipes={recipes}
+            ingredients={usedIngredients}
+            onReset={handleReset}
+          />
+        )}
 
-        {showHome && ingredient && !loading && (
-          <>
-            <div className="mb-10">
-              <SearchBar onSearch={handleSearch} isLoading={loading} />
-            </div>
-            <IngredientDetail
-              info={ingredient}
-              onReset={handleReset}
-              related={related}
-              onSearch={handleSearch}
-            />
-          </>
+        {/* Loading */}
+        {loading && (
+          <div className="text-center py-24 animate-fade-in">
+            <ChefHat size={48} className="mx-auto text-gold mb-4 animate-bounce" />
+            <p className="font-serif text-xl text-ink mb-2">AI 主廚正在思考…</p>
+            <p className="text-sm text-muted">
+              根據 {selected.length} 種食材為你設計菜單
+            </p>
+          </div>
+        )}
+
+        {/* Category / Ingredient Picker */}
+        {!recipes && !loading && view === 'category' && (
+          <CategoryPage selected={selected} onToggle={toggle} />
+        )}
+
+        {/* Favorites */}
+        {!recipes && !loading && view === 'favorites' && (
+          <FavoritesPage onSearch={() => {}} />
         )}
       </main>
 
       {/* Footer */}
       <footer className="border-t border-ink/5 bg-paper mb-16 md:mb-0">
-        <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm text-muted">
             <BookOpen size={14} />
-            <span>FoodsTime 食材百科 · AI 驅動 · 資料僅供參考</span>
+            <span>FoodsTime · AI 料理助手 · 資料僅供參考</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-muted">
             <a href="https://cooklabai.com" className="hover:text-ink transition-colors">cooklabai.com</a>
@@ -172,6 +140,17 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Basket bar — above bottom nav */}
+      {!recipes && !loading && (
+        <BasketBar
+          items={selected}
+          onRemove={item => setSelected(prev => prev.filter(i => i !== item))}
+          onClear={() => setSelected([])}
+          onSubmit={handleSubmit}
+          loading={loading}
+        />
+      )}
 
       {/* Mobile Bottom Nav */}
       <BottomNav active={view} onChange={handleNavChange} />

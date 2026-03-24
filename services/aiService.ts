@@ -120,3 +120,16 @@ export const suggestRelated = async (name: string): Promise<string[]> => {
     return JSON.parse(raw).suggestions || [];
   } catch { return []; }
 };
+
+export const suggestRecipes = async (ingredients: string[]): Promise<import('../types').Recipe[]> => {
+  const list = ingredients.join('、');
+  const raw = await chatWithFallback(
+    '你是頂級主廚AI，只回傳JSON，不得有任何額外文字。',
+    `我有這些食材：${list}
+請推薦3-5道可以做的菜（台灣繁體中文）：
+{"recipes":[{"name":"菜名","emoji":"emoji","time":"烹調時間如15分鐘","difficulty":"簡單","description":"一句美味描述","steps":["步驟1","步驟2","步驟3","步驟4"]}]}
+difficulty 只能填：簡單、中等、複雜`,
+    700
+  );
+  return JSON.parse(raw).recipes || [];
+};

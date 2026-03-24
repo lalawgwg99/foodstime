@@ -41,3 +41,12 @@ export interface SearchHistory {
   emoji: string;
   timestamp: number;
 }
+
+export interface Recipe {
+  name: string;
+  emoji: string;
+  time: string;
+  difficulty: '簡單' | '中等' | '複雜';
+  description: string;
+  steps: string[];
+}
