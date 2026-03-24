@@ -4,6 +4,9 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
 // 多模型 fallback 清單（依序嘗試，跳過 429）— 優先選快速非思考模型
 const MODELS = [
+  'stepfun/step-3.5-flash:free',
+  'sourceful/riverflow-v2-pro',
+  'arcee-ai/trinity-large-preview:free',
   'minimax/minimax-m2.5:free',
   'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-3-27b-it:free',
