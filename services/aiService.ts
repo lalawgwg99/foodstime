@@ -2,12 +2,12 @@ import { IngredientInfo } from '../types';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
-// 多模型 fallback 清單（依序嘗試，跳過 429）
+// 多模型 fallback 清單（依序嘗試，跳過 429）— 優先選快速非思考模型
 const MODELS = [
   'minimax/minimax-m2.5:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemma-3-27b-it:free',
   'mistralai/mistral-small-3.1-24b-instruct:free',
-  'qwen/qwen3-next-80b-a3b-instruct:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
 ];
 
 const getHeaders = () => {
@@ -24,7 +24,7 @@ const getHeaders = () => {
 const stripThinking = (text: string) =>
   text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
-// 依序嘗試多個模型，429 自動跳下一個
+// 依序嘗試多個模型，429 或超時自動跳下一個（每個模型最多等 15 秒）
 const chatWithFallback = async (
   systemPrompt: string,
   userPrompt: string,
@@ -32,31 +32,41 @@ const chatWithFallback = async (
 ): Promise<string> => {
   let lastError = '';
   for (const model of MODELS) {
-    const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.6,
-        max_tokens: maxTokens,
-        response_format: { type: 'json_object' },
-      }),
-    });
-    const data = await res.json();
-    if (res.status === 429 || data?.error?.code === 429) {
-      lastError = `${model} 限流`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        signal: controller.signal,
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.6,
+          max_tokens: maxTokens,
+          response_format: { type: 'json_object' },
+        }),
+      });
+      clearTimeout(timer);
+      const data = await res.json();
+      if (res.status === 429 || data?.error?.code === 429) {
+        lastError = `${model} 限流`;
+        continue;
+      }
+      if (!res.ok || data?.error) {
+        lastError = data?.error?.message || `${model} 錯誤`;
+        continue;
+      }
+      const content = data.choices?.[0]?.message?.content;
+      if (content) return stripThinking(content);
+    } catch (e) {
+      clearTimeout(timer);
+      lastError = `${model} 超時或失敗`;
       continue;
     }
-    if (!res.ok || data?.error) {
-      lastError = data?.error?.message || `${model} 錯誤`;
-      continue;
-    }
-    const content = data.choices?.[0]?.message?.content;
-    if (content) return stripThinking(content);
   }
   throw new Error(`所有模型均不可用：${lastError}`);
 };
