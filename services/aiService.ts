@@ -1,7 +1,7 @@
 import { IngredientInfo } from '../types';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
-const MODEL = 'openrouter/free'; // 智能路由，自動選可用免費模型
+const MODEL = 'mistralai/mistral-small-3.1-24b-instruct:free'; // 快速、支援 JSON、非思考模型
 
 const getHeaders = () => {
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
@@ -71,6 +71,7 @@ export const fetchIngredientInfo = async (name: string): Promise<IngredientInfo>
         { role: 'user', content: prompt },
       ],
       temperature: 0.6,
+      max_tokens: 1800,
       response_format: { type: 'json_object' },
     }),
   });
