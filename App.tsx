@@ -31,7 +31,8 @@ export default function App() {
       setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
     } catch (e) {
       console.error(e);
-      setError('查詢失敗，請稍後再試或換個食材名稱。');
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`查詢失敗：${msg}`);
     } finally {
       setLoading(false);
     }
