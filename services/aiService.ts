@@ -1,7 +1,7 @@
 import { IngredientInfo } from '../types';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
-const MODEL = 'qwen/qwen3-next-80b-a3b-instruct:free';
+const MODEL = 'openrouter/free'; // 智能路由，自動選可用免費模型
 
 const getHeaders = () => {
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
