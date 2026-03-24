@@ -1,7 +1,14 @@
 import { IngredientInfo } from '../types';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
-const MODEL = 'mistralai/mistral-small-3.1-24b-instruct:free'; // 快速、支援 JSON、非思考模型
+
+// 多模型 fallback 清單（依序嘗試，跳過 429）
+const MODELS = [
+  'minimax/minimax-m2.5:free',
+  'mistralai/mistral-small-3.1-24b-instruct:free',
+  'qwen/qwen3-next-80b-a3b-instruct:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+];
 
 const getHeaders = () => {
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
@@ -16,6 +23,43 @@ const getHeaders = () => {
 
 const stripThinking = (text: string) =>
   text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+// 依序嘗試多個模型，429 自動跳下一個
+const chatWithFallback = async (
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens = 1800
+): Promise<string> => {
+  let lastError = '';
+  for (const model of MODELS) {
+    const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.6,
+        max_tokens: maxTokens,
+        response_format: { type: 'json_object' },
+      }),
+    });
+    const data = await res.json();
+    if (res.status === 429 || data?.error?.code === 429) {
+      lastError = `${model} 限流`;
+      continue;
+    }
+    if (!res.ok || data?.error) {
+      lastError = data?.error?.message || `${model} 錯誤`;
+      continue;
+    }
+    const content = data.choices?.[0]?.message?.content;
+    if (content) return stripThinking(content);
+  }
+  throw new Error(`所有模型均不可用：${lastError}`);
+};
 
 export const fetchIngredientInfo = async (name: string): Promise<IngredientInfo> => {
   const prompt = `你是一位精通全球食材的頂級主廚兼營養學家，請對「${name}」進行深度百科介紹。
@@ -61,49 +105,24 @@ export const fetchIngredientInfo = async (name: string): Promise<IngredientInfo>
 
 語言：全部使用台灣繁體中文。數值使用數字（不含單位）。`;
 
-  const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: '你是全球食材百科的 AI 專家，精通台灣在地與全球各地食材知識。請只回傳 JSON，不得有任何額外文字。' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.6,
-      max_tokens: 1800,
-      response_format: { type: 'json_object' },
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`AI 查詢失敗: ${res.status} ${err}`);
-  }
-
-  const data = await res.json();
-  const raw = stripThinking(data.choices?.[0]?.message?.content || '{}');
+  const raw = await chatWithFallback(
+    '你是全球食材百科的 AI 專家，精通台灣在地與全球各地食材知識。請只回傳 JSON，不得有任何額外文字。',
+    prompt,
+    1800
+  );
   return JSON.parse(raw) as IngredientInfo;
 };
 
 export const suggestRelated = async (name: string): Promise<string[]> => {
-  const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: '請只回傳 JSON，格式為 {"suggestions": ["食材1","食材2","食材3","食材4","食材5"]}' },
-        { role: 'user', content: `請推薦 5 種與「${name}」相關或常搭配的食材名稱（台灣繁體中文）。` },
-      ],
-      temperature: 0.8,
-      response_format: { type: 'json_object' },
-    }),
-  });
-
-  if (!res.ok) return [];
-  const data = await res.json();
-  const raw = stripThinking(data.choices?.[0]?.message?.content || '{}');
-  const parsed = JSON.parse(raw);
-  return parsed.suggestions || [];
+  try {
+    const raw = await chatWithFallback(
+      '請只回傳 JSON，格式為 {"suggestions": ["食材1","食材2","食材3","食材4","食材5"]}',
+      `請推薦 5 種與「${name}」相關或常搭配的食材名稱（台灣繁體中文）。`,
+      200
+    );
+    const parsed = JSON.parse(raw);
+    return parsed.suggestions || [];
+  } catch {
+    return [];
+  }
 };
