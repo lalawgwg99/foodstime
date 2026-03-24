@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { BookOpen, Github, Coffee } from 'lucide-react';
+import { BookOpen, Coffee } from 'lucide-react';
 import { SearchBar } from './components/SearchBar';
 import { IngredientDetail } from './components/IngredientDetail';
 import { FeaturedIngredients } from './components/FeaturedIngredients';
 import { LoadingScreen } from './components/LoadingScreen';
+import { CategoryPage } from './components/CategoryPage';
+import { FavoritesPage, useFavorites } from './components/FavoritesPage';
+import { BottomNav, View } from './components/BottomNav';
 import { fetchIngredientInfo, suggestRelated } from './services/aiService';
 import { IngredientInfo } from './types';
 
@@ -13,6 +16,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [searchingFor, setSearchingFor] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<View>('home');
+  const { addHistory } = useFavorites();
 
   const handleSearch = async (name: string) => {
     setLoading(true);
@@ -20,6 +25,7 @@ export default function App() {
     setIngredient(null);
     setRelated([]);
     setSearchingFor(name);
+    setView('home');
 
     try {
       const [info, rel] = await Promise.all([
@@ -28,6 +34,7 @@ export default function App() {
       ]);
       setIngredient(info);
       setRelated(rel);
+      addHistory({ name: info.name, emoji: info.emoji, timestamp: Date.now() });
       setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
     } catch (e) {
       console.error(e);
@@ -42,8 +49,26 @@ export default function App() {
     setIngredient(null);
     setRelated([]);
     setError(null);
+    setView('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const handleNavChange = (v: View) => {
+    if (v === 'search') {
+      // focus search on home
+      setView('home');
+      setIngredient(null);
+      setTimeout(() => {
+        const el = document.querySelector<HTMLInputElement>('input[type="text"]');
+        el?.focus();
+      }, 100);
+    } else {
+      setView(v);
+      if (v !== 'home') setIngredient(null);
+    }
+  };
+
+  const showHome = view === 'home';
 
   return (
     <div className="min-h-screen bg-paper font-sans flex flex-col">
@@ -70,7 +95,14 @@ export default function App() {
       </nav>
 
       <main className="flex-1 max-w-5xl mx-auto px-6 py-12 w-full">
-        {!ingredient && !loading && (
+        {/* Category Page */}
+        {view === 'category' && <CategoryPage onSearch={handleSearch} />}
+
+        {/* Favorites Page */}
+        {view === 'favorites' && <FavoritesPage onSearch={handleSearch} />}
+
+        {/* Home / Search / Detail */}
+        {showHome && !ingredient && !loading && (
           <>
             {/* Hero */}
             <div className="text-center mb-12 animate-slide-up">
@@ -85,26 +117,22 @@ export default function App() {
               <div className="w-16 h-px bg-gold/40 mx-auto mt-8" />
             </div>
 
-            {/* Search */}
             <SearchBar onSearch={handleSearch} isLoading={loading} />
 
-            {/* Error */}
             {error && (
               <p className="text-center text-red-500 text-sm mt-6 bg-red-50 border border-red-100 rounded-xl py-3 px-6 max-w-md mx-auto">
                 {error}
               </p>
             )}
 
-            {/* Featured */}
             <FeaturedIngredients onSearch={handleSearch} />
           </>
         )}
 
-        {loading && <LoadingScreen name={searchingFor} />}
+        {showHome && loading && <LoadingScreen name={searchingFor} />}
 
-        {ingredient && !loading && (
+        {showHome && ingredient && !loading && (
           <>
-            {/* Inline search while viewing result */}
             <div className="mb-10">
               <SearchBar onSearch={handleSearch} isLoading={loading} />
             </div>
@@ -119,7 +147,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-ink/5 bg-paper">
+      <footer className="border-t border-ink/5 bg-paper mb-16 md:mb-0">
         <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-muted">
             <BookOpen size={14} />
@@ -131,6 +159,9 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Mobile Bottom Nav */}
+      <BottomNav active={view} onChange={handleNavChange} />
     </div>
   );
 }
