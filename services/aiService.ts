@@ -10,7 +10,7 @@ const getHeaders = () => {
     'Authorization': `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
     'HTTP-Referer': 'https://cooklabai.com',
-    'X-Title': 'FoodsTime 食材百科',
+    'X-Title': 'FoodsTime Ingredient Encyclopedia',
   };
 };
 
