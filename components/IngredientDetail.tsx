@@ -28,10 +28,16 @@ export const IngredientDetail: React.FC<Props> = ({ info, onReset, related, onSe
     <div className="w-full max-w-4xl mx-auto animate-fade-in pb-24 md:pb-0">
       {/* Hero Header */}
       <div className="text-center mb-8">
-        <div className="text-7xl md:text-8xl mb-4">{info.emoji}</div>
+        {/* Emoji with glow card */}
+        <div className="relative inline-flex items-center justify-center mb-6">
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-gold/20 via-amber-100/40 to-transparent blur-2xl scale-150" />
+          <div className="relative w-36 h-36 md:w-44 md:h-44 rounded-full bg-gradient-to-br from-amber-50 via-white to-cream border border-gold/20 shadow-xl flex items-center justify-center">
+            <span className="text-6xl md:text-7xl select-none">{info.emoji}</span>
+          </div>
+        </div>
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-muted mb-2">{info.englishName}</p>
         <h1 className="text-4xl md:text-6xl font-serif font-bold text-ink mb-3">{info.name}</h1>
-        <p className="text-lg text-ink/50 font-serif italic">{info.tagline}</p>
+        <p className="text-base text-ink/50 font-serif italic max-w-sm mx-auto">{info.tagline}</p>
         <div className="mt-6 flex items-center justify-center gap-4">
           <button
             onClick={onReset}

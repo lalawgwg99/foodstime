@@ -1,8 +1,10 @@
 import { IngredientInfo } from '../types';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
+const CACHE_KEY_PREFIX = 'foodstime_cache_';
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 天
 
-// 多模型 fallback 清單（依序嘗試，跳過 429）— 優先選快速非思考模型
+// 多模型 fallback 清單（依序嘗試，跳過 429）
 const MODELS = [
   'stepfun/step-3.5-flash:free',
   'sourceful/riverflow-v2-pro',
@@ -27,11 +29,25 @@ const getHeaders = () => {
 const stripThinking = (text: string) =>
   text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
+// localStorage 快取
+const readCache = (key: string): IngredientInfo | null => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY_PREFIX + key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) { localStorage.removeItem(CACHE_KEY_PREFIX + key); return null; }
+    return data as IngredientInfo;
+  } catch { return null; }
+};
+const writeCache = (key: string, data: IngredientInfo) => {
+  try { localStorage.setItem(CACHE_KEY_PREFIX + key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+};
+
 // 依序嘗試多個模型，429 或超時自動跳下一個（每個模型最多等 15 秒）
 const chatWithFallback = async (
   systemPrompt: string,
   userPrompt: string,
-  maxTokens = 1800
+  maxTokens = 1400
 ): Promise<string> => {
   let lastError = '';
   for (const model of MODELS) {
@@ -48,26 +64,20 @@ const chatWithFallback = async (
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
-          temperature: 0.6,
+          temperature: 0.5,
           max_tokens: maxTokens,
           response_format: { type: 'json_object' },
         }),
       });
       clearTimeout(timer);
       const data = await res.json();
-      if (res.status === 429 || data?.error?.code === 429) {
-        lastError = `${model} 限流`;
-        continue;
-      }
-      if (!res.ok || data?.error) {
-        lastError = data?.error?.message || `${model} 錯誤`;
-        continue;
-      }
+      if (res.status === 429 || data?.error?.code === 429) { lastError = `${model} 限流`; continue; }
+      if (!res.ok || data?.error) { lastError = data?.error?.message || `${model} 錯誤`; continue; }
       const content = data.choices?.[0]?.message?.content;
       if (content) return stripThinking(content);
-    } catch (e) {
+    } catch {
       clearTimeout(timer);
-      lastError = `${model} 超時或失敗`;
+      lastError = `${model} 超時`;
       continue;
     }
   }
@@ -75,67 +85,38 @@ const chatWithFallback = async (
 };
 
 export const fetchIngredientInfo = async (name: string): Promise<IngredientInfo> => {
-  const prompt = `你是一位精通全球食材的頂級主廚兼營養學家，請對「${name}」進行深度百科介紹。
+  const cacheKey = name.trim().toLowerCase();
+  const cached = readCache(cacheKey);
+  if (cached) return cached;
 
-請嚴格回傳以下 JSON 格式，不得有任何多餘文字：
-{
-  "name": "食材的正式中文名稱",
-  "englishName": "英文名稱",
-  "emoji": "最適合的單一 emoji",
-  "tagline": "一句話介紹（20字以內，有詩意）",
-  "origin": {
-    "story": "產地故事，描述這種食材的發源地與文化背景（100-150字）",
-    "regions": ["主要產地1", "主要產地2", "主要產地3"],
-    "history": "歷史淵源，這種食材如何影響人類飲食文化（80-100字）"
-  },
-  "nutrition": {
-    "calories": 每100g熱量數字,
-    "protein": 每100g蛋白質克數數字,
-    "carbs": 每100g碳水克數數字,
-    "fat": 每100g脂肪克數數字,
-    "fiber": 每100g膳食纖維克數數字,
-    "highlights": ["突出的營養素1", "突出的營養素2", "突出的營養素3"],
-    "healthBenefits": ["健康功效1", "健康功效2", "健康功效3", "健康功效4"]
-  },
-  "cooking": {
-    "methods": ["烹調方式1", "烹調方式2", "烹調方式3", "烹調方式4"],
-    "tips": "專業烹調秘訣，讓這種食材發揮最佳風味（60-80字）",
-    "famousDishes": ["代表料理1", "代表料理2", "代表料理3", "代表料理4", "代表料理5"]
-  },
-  "pairing": {
-    "ingredients": ["最佳搭配食材1", "最佳搭配食材2", "最佳搭配食材3", "最佳搭配食材4"],
-    "flavors": ["搭配風味1", "搭配風味2", "搭配風味3"],
-    "avoid": ["避免搭配1", "避免搭配2"]
-  },
-  "market": {
-    "peakSeason": ["盛產月份1", "盛產月份2"],
-    "priceRange": "台灣市場大約價格區間（如：每台斤 60-120 元）",
-    "buyingTips": "選購要點（30-50字）",
-    "storageMethod": "保存方式（30-50字）"
-  },
-  "trivia": "有趣冷知識或文化小故事（50-80字）"
-}
-
-語言：全部使用台灣繁體中文。數值使用數字（不含單位）。`;
+  const prompt = `你是食材百科專家。請對「${name}」回傳以下 JSON，不得有多餘文字：
+{"name":"正式中文名","englishName":"英文名","emoji":"單一emoji","tagline":"一句話介紹20字內",
+"origin":{"story":"產地故事100字","regions":["產地1","產地2","產地3"],"history":"歷史淵源80字"},
+"nutrition":{"calories":數字,"protein":數字,"carbs":數字,"fat":數字,"fiber":數字,
+"highlights":["亮點1","亮點2","亮點3"],"healthBenefits":["功效1","功效2","功效3","功效4"]},
+"cooking":{"methods":["方式1","方式2","方式3","方式4"],"tips":"烹調秘訣60字","famousDishes":["料理1","料理2","料理3","料理4","料理5"]},
+"pairing":{"ingredients":["食材1","食材2","食材3","食材4"],"flavors":["風味1","風味2","風味3"],"avoid":["避免1","避免2"]},
+"market":{"peakSeason":["月份1","月份2"],"priceRange":"台灣價格區間","buyingTips":"選購要點30字","storageMethod":"保存方式30字"},
+"trivia":"冷知識50字"}
+語言：台灣繁體中文。數值純數字不含單位。`;
 
   const raw = await chatWithFallback(
-    '你是全球食材百科的 AI 專家，精通台灣在地與全球各地食材知識。請只回傳 JSON，不得有任何額外文字。',
+    '你是食材百科AI，只回傳JSON，不得有任何額外文字。',
     prompt,
-    1800
+    1400
   );
-  return JSON.parse(raw) as IngredientInfo;
+  const result = JSON.parse(raw) as IngredientInfo;
+  writeCache(cacheKey, result);
+  return result;
 };
 
 export const suggestRelated = async (name: string): Promise<string[]> => {
   try {
     const raw = await chatWithFallback(
-      '請只回傳 JSON，格式為 {"suggestions": ["食材1","食材2","食材3","食材4","食材5"]}',
-      `請推薦 5 種與「${name}」相關或常搭配的食材名稱（台灣繁體中文）。`,
-      200
+      '只回傳JSON。',
+      `推薦5種與「${name}」相關的食材（台灣繁體中文）：{"suggestions":["食材1","食材2","食材3","食材4","食材5"]}`,
+      120
     );
-    const parsed = JSON.parse(raw);
-    return parsed.suggestions || [];
-  } catch {
-    return [];
-  }
+    return JSON.parse(raw).suggestions || [];
+  } catch { return []; }
 };
